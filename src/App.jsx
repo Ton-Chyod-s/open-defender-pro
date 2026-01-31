@@ -98,83 +98,132 @@ function ThreatsTab({ threats, cleanQuarantine, removeAllThreats, loadThreats })
   const [selectedThreat, setSelectedThreat] = useState(null);
   const [actionStatus, setActionStatus] = useState('');
   const [loading, setLoading] = useState(false);
+  const [processingAction, setProcessingAction] = useState(false);
+  
+  const [expandedSections, setExpandedSections] = useState({
+    active: true,
+    quarantined: false,
+    removed: false
+  });
 
   useEffect(() => {
     loadThreats();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleRefresh = async () => {
     setLoading(true);
-    await loadThreats();
-    setLoading(false);
+    setActionStatus('');
+    try {
+      await loadThreats();
+      setActionStatus('✅ Lista atualizada!');
+      setTimeout(() => setActionStatus(''), 2000);
+    } catch (error) {
+      setActionStatus('❌ Erro ao atualizar');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleSection = (section) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
+  };
+
+  const executeAction = async (actionFn, successMsg, threatName) => {
+    setProcessingAction(true);
+    try {
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('TIMEOUT')), 30000)
+      );
+      
+      await Promise.race([actionFn(), timeoutPromise]);
+      setActionStatus(`✅ ${successMsg}`);
+      
+      setTimeout(async () => {
+        setActionStatus('🔄 Aguardando processamento...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        setActionStatus('🔄 Atualizando lista...');
+        
+        try {
+          await invoke('refresh_threat_detection');
+        } catch (e) {
+          console.warn('Não foi possível atualizar status do Defender:', e);
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 500));
+        await loadThreats();
+        
+        setActionStatus('✅ Lista atualizada!');
+        setSelectedThreat(null);
+        
+        setTimeout(() => {
+          setActionStatus('');
+          setProcessingAction(false);
+        }, 1500);
+      }, 500);
+    } catch (error) {
+      if (error.message === 'TIMEOUT') {
+        setActionStatus('⏱️ Timeout: Windows Defender travou. Delete manualmente.');
+      } else {
+        setActionStatus(`❌ Erro: ${error}`);
+      }
+      setProcessingAction(false);
+      setTimeout(() => {
+        setActionStatus('');
+        setSelectedThreat(null);
+      }, 5000);
+    }
   };
 
   const handleQuarantine = async (threat) => {
     if (!window.confirm(`Mover "${threat.threat_name}" para quarentena?`)) return;
-    try {
-      setActionStatus('🔒 Movendo para quarentena...');
-      await invoke('quarantine_threat', { threatId: threat.threat_id });
-      setActionStatus('✅ Movido para quarentena!');
-      setTimeout(async () => {
-        setSelectedThreat(null);
-        setActionStatus('');
-        await loadThreats();
-      }, 2000);
-    } catch (error) {
-      setActionStatus('❌ Erro: ' + error);
-    }
+    
+    setActionStatus('🔒 Movendo para quarentena...');
+    await executeAction(
+      () => invoke('quarantine_threat', { threatId: threat.threat_id }),
+      'Movido para quarentena!',
+      threat.threat_name
+    );
   };
 
   const handleRemove = async (threat) => {
-    if (!window.confirm(`Remover permanentemente "${threat.threat_name}"?\\\n\\\nEsta ação não pode ser desfeita!`)) return;
-    try {
-      setActionStatus('🗑️ Removendo...');
-      await invoke('remove_specific_threat', { threatId: threat.threat_id });
-      setActionStatus('✅ Removido!');
-      setTimeout(async () => {
-        setSelectedThreat(null);
-        setActionStatus('');
-        await loadThreats();
-      }, 2000);
-    } catch (error) {
-      setActionStatus('❌ Erro: ' + error);
-    }
+    if (!window.confirm(`Remover permanentemente "${threat.threat_name}"?\n\nEsta ação não pode ser desfeita!`)) return;
+    
+    setActionStatus('🗑️ Removendo...');
+    await executeAction(
+      () => invoke('remove_specific_threat', { threatId: threat.threat_id }),
+      'Removido com sucesso!',
+      threat.threat_name
+    );
   };
 
   const handleAllow = async (threat) => {
-    if (!window.confirm(`Permitir "${threat.threat_name}" e adicionar às exceções?\\\n\\\n⚠️ CUIDADO: Só faça isso se tiver certeza que é um falso positivo!`)) return;
-    try {
-      setActionStatus('✅ Permitindo...');
-      await invoke('allow_threat', { threatId: threat.threat_id, filePath: threat.file_path });
-      setActionStatus('✅ Arquivo permitido!');
-      setTimeout(async () => {
-        setSelectedThreat(null);
-        setActionStatus('');
-        await loadThreats();
-      }, 2000);
-    } catch (error) {
-      setActionStatus('❌ Erro: ' + error);
-    }
+    if (!window.confirm(`Permitir "${threat.threat_name}" e adicionar às exceções?\n\n⚠️ CUIDADO: Só faça isso se tiver certeza que é um falso positivo!`)) return;
+    
+    setActionStatus('✅ Permitindo...');
+    await executeAction(
+      () => invoke('allow_threat', { threatId: threat.threat_id, filePath: threat.file_path }),
+      'Arquivo permitido!',
+      threat.threat_name
+    );
   };
 
   const handleRestore = async (threat) => {
     if (!window.confirm(`Restaurar "${threat.threat_name}" da quarentena?`)) return;
-    try {
-      setActionStatus('📦 Restaurando...');
-      await invoke('restore_threat', { threatId: threat.threat_id });
-      setActionStatus('✅ Restaurado!');
-      setTimeout(async () => {
-        setSelectedThreat(null);
-        setActionStatus('');
-        await loadThreats();
-      }, 2000);
-    } catch (error) {
-      setActionStatus('❌ Erro: ' + error);
-    }
+    
+    setActionStatus('📦 Restaurando...');
+    await executeAction(
+      () => invoke('restore_threat', { threatId: threat.threat_id }),
+      'Restaurado com sucesso!',
+      threat.threat_name
+    );
   };
 
   if (!threats) {
-    return <div className="loading">Carregando ameaças...</div>;
+    return <div className="loading">⏳ Carregando ameaças...</div>;
   }
 
   const getSeverityColor = (severity) => {
@@ -200,7 +249,7 @@ function ThreatsTab({ threats, cleanQuarantine, removeAllThreats, loadThreats })
   const removedThreats = threats.threats.filter(t => t.category === 'Removed');
 
   const renderThreatCard = (threat, index) => (
-    <div key={index} className="threat-card" style={{ borderLeft: `4px solid ${getSeverityColor(threat.severity)}` }}>
+    <div key={`${threat.threat_id}-${index}`} className="threat-card" style={{ borderLeft: `4px solid ${getSeverityColor(threat.severity)}` }}>
       <div className="threat-header">
         <span className="threat-title">{getSeverityIcon(threat.severity)} {threat.threat_name}</span>
         <span className="threat-status">{getStatusIcon(threat.status)} {threat.status}</span>
@@ -227,12 +276,46 @@ function ThreatsTab({ threats, cleanQuarantine, removeAllThreats, loadThreats })
     </div>
   );
 
+  const CollapsibleSection = ({ title, count, threats, sectionKey, className }) => {
+    const isExpanded = expandedSections[sectionKey];
+    
+    if (count === 0) return null;
+    
+    return (
+      <div className="threat-section">
+        <h3 
+          className={`section-title ${className} collapsible`} 
+          onClick={() => toggleSection(sectionKey)}
+          style={{ cursor: 'pointer', userSelect: 'none' }}
+        >
+          <span>{isExpanded ? '▼' : '▶'}</span> {title} ({count})
+        </h3>
+        {isExpanded && (
+          <div className="threats-list">
+            {threats.map(renderThreatCard)}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   if (threats.total_threats === 0) {
     return (
       <div className="no-threats">
         <div className="no-threats-icon">✅</div>
         <h2>Nenhuma ameaça detectada</h2>
         <p>Seu sistema está protegido!</p>
+        {actionStatus && (
+          <div style={{ 
+            marginTop: '15px', 
+            padding: '10px', 
+            borderRadius: '6px',
+            backgroundColor: actionStatus.includes('❌') ? '#fee' : '#efe',
+            color: actionStatus.includes('❌') ? '#c33' : '#2a2'
+          }}>
+            {actionStatus}
+          </div>
+        )}
         <button className="btn btn-secondary" onClick={handleRefresh} disabled={loading} style={{ marginTop: '20px' }}>
           {loading ? '⏳ Atualizando...' : '🔄 Atualizar'}
         </button>
@@ -254,71 +337,149 @@ function ThreatsTab({ threats, cleanQuarantine, removeAllThreats, loadThreats })
           {threats.medium_severity > 0 && <span className="badge medium">🟡 {threats.medium_severity} Média</span>}
           {threats.low_severity > 0 && <span className="badge low">🔵 {threats.low_severity} Baixa</span>}
         </div>
+        {actionStatus && (
+          <div style={{ 
+            marginTop: '15px', 
+            padding: '12px', 
+            borderRadius: '6px',
+            backgroundColor: actionStatus.includes('❌') ? '#fee' : actionStatus.includes('✅') ? '#efe' : '#fef3cd',
+            color: actionStatus.includes('❌') ? '#c33' : actionStatus.includes('✅') ? '#2a2' : '#856404',
+            fontWeight: '500',
+            textAlign: 'center'
+          }}>
+            {actionStatus}
+          </div>
+        )}
       </div>
 
-      {activeThreats.length > 0 && (
-        <div className="threat-section">
-          <h3 className="section-title danger">⚠️ Ameaças Ativas ({activeThreats.length})</h3>
-          <div className="threats-list">{activeThreats.map(renderThreatCard)}</div>
-        </div>
-      )}
+      <CollapsibleSection 
+        title="⚠️ Ameaças Ativas" 
+        count={activeThreats.length} 
+        threats={activeThreats} 
+        sectionKey="active"
+        className="danger"
+      />
 
-      {quarantinedThreats.length > 0 && (
-        <div className="threat-section">
-          <h3 className="section-title warning">🔒 Em Quarentena ({quarantinedThreats.length})</h3>
-          <div className="threats-list">{quarantinedThreats.map(renderThreatCard)}</div>
-        </div>
-      )}
+      <CollapsibleSection 
+        title="🔒 Em Quarentena" 
+        count={quarantinedThreats.length} 
+        threats={quarantinedThreats} 
+        sectionKey="quarantined"
+        className="warning"
+      />
 
-      {removedThreats.length > 0 && (
-        <div className="threat-section">
-          <h3 className="section-title success">✅ Removidas - Histórico ({removedThreats.length})</h3>
-          <div className="threats-list">{removedThreats.map(renderThreatCard)}</div>
-        </div>
-      )}
+      <CollapsibleSection 
+        title="✅ Removidas - Histórico" 
+        count={removedThreats.length} 
+        threats={removedThreats} 
+        sectionKey="removed"
+        className="success"
+      />
 
       <div className="threat-actions-global">
-        <button className="btn btn-warning" onClick={cleanQuarantine}>🗑️ Limpar Quarentena</button>
-        <button className="btn btn-danger" onClick={removeAllThreats}>🧹 Remover Todas</button>
+        <button className="btn btn-warning" onClick={cleanQuarantine} disabled={processingAction}>
+          🗑️ Limpar Quarentena
+        </button>
+        <button className="btn btn-danger" onClick={removeAllThreats} disabled={processingAction}>
+          🧹 Remover Todas
+        </button>
       </div>
 
       {selectedThreat && (
-        <div className="modal" onClick={() => setSelectedThreat(null)}>
+        <div className="modal" onClick={() => !processingAction && setSelectedThreat(null)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <h2>{selectedThreat.threat_name}</h2>
-            {actionStatus && <div className="action-status">{actionStatus}</div>}
+            {actionStatus && (
+              <div style={{
+                padding: '12px',
+                marginBottom: '15px',
+                borderRadius: '6px',
+                backgroundColor: actionStatus.includes('❌') ? '#fee' : actionStatus.includes('✅') ? '#efe' : '#fef3cd',
+                color: actionStatus.includes('❌') ? '#c33' : actionStatus.includes('✅') ? '#2a2' : '#856404',
+                fontWeight: '500',
+                textAlign: 'center'
+              }}>
+                {actionStatus}
+              </div>
+            )}
             <div className="modal-details">
               <div className="detail-row"><strong>ID:</strong> {selectedThreat.threat_id}</div>
               <div className="detail-row">
                 <strong>Severidade:</strong> 
-                <span style={{ color: getSeverityColor(selectedThreat.severity) }}>
+                <span style={{ color: getSeverityColor(selectedThreat.severity), marginLeft: '8px' }}>
                   {getSeverityIcon(selectedThreat.severity)} {selectedThreat.severity}
                 </span>
               </div>
-              <div className="detail-row"><strong>Status:</strong> {getStatusIcon(selectedThreat.status)} {selectedThreat.status}</div>
-              <div className="detail-row"><strong>Arquivo:</strong> <code className="code-block">{selectedThreat.file_path}</code></div>
+              <div className="detail-row">
+                <strong>Status:</strong> 
+                <span style={{ marginLeft: '8px' }}>
+                  {getStatusIcon(selectedThreat.status)} {selectedThreat.status}
+                </span>
+              </div>
+              <div className="detail-row">
+                <strong>Categoria:</strong> 
+                <span style={{ marginLeft: '8px' }}>{selectedThreat.category}</span>
+              </div>
+              <div className="detail-row">
+                <strong>Arquivo:</strong> 
+                <code style={{ 
+                  display: 'block', 
+                  marginTop: '5px', 
+                  padding: '8px', 
+                  backgroundColor: '#f5f5f5', 
+                  borderRadius: '4px',
+                  fontSize: '0.85em',
+                  wordBreak: 'break-all'
+                }}>
+                  {selectedThreat.file_path}
+                </code>
+              </div>
               <div className="detail-row"><strong>Detectado em:</strong> {selectedThreat.detected_time}</div>
               <div className="detail-row"><strong>Ação tomada:</strong> {selectedThreat.action_taken}</div>
             </div>
             <div className="modal-actions">
-              {!selectedThreat.status.includes('Quarantined') && (
-                <button className="btn btn-warning btn-small" onClick={() => handleQuarantine(selectedThreat)} disabled={actionStatus !== ''}>
+              {selectedThreat.category === 'Active' && (
+                <button 
+                  className="btn btn-warning btn-small" 
+                  onClick={() => handleQuarantine(selectedThreat)} 
+                  disabled={processingAction}
+                >
                   🔒 Quarentena
                 </button>
               )}
-              {selectedThreat.status.includes('Quarantined') && (
-                <button className="btn btn-secondary btn-small" onClick={() => handleRestore(selectedThreat)} disabled={actionStatus !== ''}>
+              {selectedThreat.category === 'Quarantined' && (
+                <button 
+                  className="btn btn-secondary btn-small" 
+                  onClick={() => handleRestore(selectedThreat)} 
+                  disabled={processingAction}
+                >
                   📦 Restaurar
                 </button>
               )}
-              <button className="btn btn-danger btn-small" onClick={() => handleRemove(selectedThreat)} disabled={actionStatus !== ''}>
-                🗑️ Remover
-              </button>
-              <button className="btn btn-secondary btn-small" onClick={() => handleAllow(selectedThreat)} disabled={actionStatus !== ''}>
-                ✅ Permitir
-              </button>
-              <button className="btn btn-primary btn-small" onClick={() => setSelectedThreat(null)}>
-                Fechar
+              {selectedThreat.category !== 'Removed' && (
+                <button 
+                  className="btn btn-danger btn-small" 
+                  onClick={() => handleRemove(selectedThreat)} 
+                  disabled={processingAction}
+                >
+                  🗑️ Remover
+                </button>
+              )}
+              {selectedThreat.category === 'Active' && (
+                <button 
+                  className="btn btn-secondary btn-small" 
+                  onClick={() => handleAllow(selectedThreat)} 
+                  disabled={processingAction}
+                >
+                  ✅ Permitir
+                </button>
+              )}
+              <button 
+                className="btn btn-primary btn-small" 
+                onClick={() => !processingAction && setSelectedThreat(null)}
+                disabled={processingAction}
+              >
+                {processingAction ? '⏳ Aguarde...' : 'Fechar'}
               </button>
             </div>
           </div>
@@ -380,12 +541,20 @@ function App() {
 
   const loadThreats = async () => {
     try {
-      setThreats(null);
+      console.log('🔄 Carregando ameaças...');
       const result = await invoke('get_threat_details');
+      console.log('✅ Ameaças carregadas:', result);
       setThreats(result);
+      // Removido setUpdateKey para evitar loop infinito
     } catch (error) {
-      console.error('Erro ao carregar ameaças:', error);
-      setThreats({ total_threats: 0, threats: [] });
+      console.error('❌ Erro ao carregar ameaças:', error);
+      setThreats({ 
+        total_threats: 0, 
+        threats: [],
+        high_severity: 0,
+        medium_severity: 0,
+        low_severity: 0
+      });
     }
   };
 
@@ -429,14 +598,14 @@ function App() {
       setStatus('⚡ Verificação rápida em andamento...');
       
       const commonPaths = [
-        'C:\\Windows\\\\System32\\\\',
-        'C:\\Program Files\\\\',
-        'C:\\Program Files (x86)\\\\',
-        'C:\\Users\\\\' + (window.USERNAME || 'Usuario') + '\\\\AppData\\\\Local\\\\',
-        'C:\\Users\\\\' + (window.USERNAME || 'Usuario') + '\\\\AppData\\\\Roaming\\\\',
-        'C:\\Users\\\\' + (window.USERNAME || 'Usuario') + '\\\\Downloads\\\\',
-        'C:\\Users\\\\' + (window.USERNAME || 'Usuario') + '\\\\Documents\\\\',
-        'C:\\Windows\\\\Temp\\\\',
+        'C:\\Windows\\System32\\',
+        'C:\\Program Files\\',
+        'C:\\Program Files (x86)\\',
+        'C:\\Users\\' + (window.USERNAME || 'Usuario') + '\\AppData\\Local\\',
+        'C:\\Users\\' + (window.USERNAME || 'Usuario') + '\\AppData\\Roaming\\',
+        'C:\\Users\\' + (window.USERNAME || 'Usuario') + '\\Downloads\\',
+        'C:\\Users\\' + (window.USERNAME || 'Usuario') + '\\Documents\\',
+        'C:\\Windows\\Temp\\',
       ];
       
       let fileCount = 0;
@@ -456,6 +625,9 @@ function App() {
       setIsScanning(false);
       setStatus(result.threats_found > 0 ? '⚠️ Ameaças encontradas' : '✅ Nenhuma ameaça');
       setLastScanTime(new Date().toLocaleString('pt-BR'));
+      
+      // Atualiza ameaças após scan
+      console.log('🔄 Atualizando lista de ameaças após scan...');
       await loadThreats();
     } catch (error) {
       console.error('Erro no scan:', error);
@@ -473,16 +645,16 @@ function App() {
       setStatus('🔍 Verificação completa em andamento...');
       
       const commonPaths = [
-        'C:\\Windows\\\\System32\\\\',
-        'C:\\Program Files\\\\',
-        'C:\\Program Files (x86)\\\\',
-        'C:\\Users\\\\' + (window.USERNAME || 'Usuario') + '\\\\AppData\\\\Local\\\\',
-        'C:\\Users\\\\' + (window.USERNAME || 'Usuario') + '\\\\AppData\\\\Roaming\\\\',
-        'C:\\Users\\\\' + (window.USERNAME || 'Usuario') + '\\\\Downloads\\\\',
-        'C:\\Users\\\\' + (window.USERNAME || 'Usuario') + '\\\\Documents\\\\',
-        'C:\\Users\\\\' + (window.USERNAME || 'Usuario') + '\\\\Desktop\\\\',
-        'C:\\Windows\\\\Temp\\\\',
-        'C:\\ProgramData\\\\',
+        'C:\\Windows\\System32\\',
+        'C:\\Program Files\\',
+        'C:\\Program Files (x86)\\',
+        'C:\\Users\\' + (window.USERNAME || 'Usuario') + '\\AppData\\Local\\',
+        'C:\\Users\\' + (window.USERNAME || 'Usuario') + '\\AppData\\Roaming\\',
+        'C:\\Users\\' + (window.USERNAME || 'Usuario') + '\\Downloads\\',
+        'C:\\Users\\' + (window.USERNAME || 'Usuario') + '\\Documents\\',
+        'C:\\Users\\' + (window.USERNAME || 'Usuario') + '\\Desktop\\',
+        'C:\\Windows\\Temp\\',
+        'C:\\ProgramData\\',
       ];
       
       const fileExtensions = ['.exe', '.dll', '.sys', '.bat', '.cmd', '.ps1', '.vbs', '.js', '.jar', '.zip'];
@@ -505,6 +677,9 @@ function App() {
       setIsScanning(false);
       setStatus(result.threats_found > 0 ? '⚠️ Ameaças encontradas' : '✅ Nenhuma ameaça');
       setLastScanTime(new Date().toLocaleString('pt-BR'));
+      
+      // Atualiza ameaças após scan
+      console.log('🔄 Atualizando lista de ameaças após scan...');
       await loadThreats();
     } catch (error) {
       console.error('Erro no scan:', error);

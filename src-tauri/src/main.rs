@@ -55,6 +55,8 @@ fn run_powershell(command: &str) -> Result<String, String> {
     let output = Command::new("powershell")
         .arg("-NoProfile")
         .arg("-NonInteractive")
+        .arg("-ExecutionPolicy")
+        .arg("Bypass")
         .arg("-Command")
         .arg(command)
         .output()
@@ -63,7 +65,9 @@ fn run_powershell(command: &str) -> Result<String, String> {
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
     } else {
-        Err(String::from_utf8_lossy(&output.stderr).to_string())
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        Err(format!("STDERR: {} | STDOUT: {}", stderr, stdout))
     }
 }
 
@@ -202,7 +206,6 @@ async fn clean_temp_files() -> Result<CleanResult, String> {
 #[tauri::command]
 async fn cancel_scan() -> Result<String, String> {
     let command = r#"
-        # Parar processos do Windows Defender scan
         Get-Process | Where-Object {
             $_.Name -like "*MpCmdRun*"
         } | Stop-Process -Force -ErrorAction SilentlyContinue
@@ -233,19 +236,18 @@ fn get_threat_details() -> Result<ThreatSummary, String> {
                 default { "Low" }
             }
             
-            # Determinar categoria baseado no status
             $category = switch ($threat.ThreatStatusID) {
-                1 { "Active" }           # Detectado e ativo
-                2 { "Quarantined" }      # Em quarentena
-                3 { "Quarantined" }      # Em quarentena (variante)
-                5 { "Allowed" }          # Permitido
-                6 { "Removed" }          # Removido
-                102 { "Active" }         # Falha ao limpar (ainda ativo)
-                103 { "Active" }         # Falha quarentena (ainda ativo)
-                104 { "Active" }         # Falha remover (ainda ativo)
-                105 { "Active" }         # Falha permitir (ainda ativo)
-                106 { "Removed" }        # Abandonado (considerado removido)
-                107 { "Active" }         # Falha bloquear (ainda ativo)
+                1 { "Active" }
+                2 { "Quarantined" }
+                3 { "Quarantined" }
+                5 { "Allowed" }
+                6 { "Removed" }
+                102 { "Active" }
+                103 { "Active" }
+                104 { "Active" }
+                105 { "Active" }
+                106 { "Removed" }
+                107 { "Active" }
                 default { "Unknown" }
             }
             
@@ -328,25 +330,19 @@ fn get_threat_details() -> Result<ThreatSummary, String> {
 #[tauri::command]
 async fn clean_quarantine() -> Result<String, String> {
     let command = r#"
-        # Pegar todas as ameaças
         $threats = Get-MpThreatDetection
         
         if ($threats) {
             $count = $threats.Count
             
-            # Remover uma por uma pelo ThreatID
             foreach ($threat in $threats) {
                 try {
                     Remove-MpThreat -ThreatID $threat.ThreatID -ErrorAction Stop
-                } catch {
-                    # Ignorar erros
-                }
+                } catch {}
             }
             
-            # Aguardar um pouco
             Start-Sleep -Seconds 1
             
-            # Verificar o que sobrou
             $remaining = Get-MpThreatDetection
             $remainingCount = if ($remaining) { $remaining.Count } else { 0 }
             
@@ -363,19 +359,15 @@ async fn clean_quarantine() -> Result<String, String> {
 #[tauri::command]
 async fn remove_all_threats() -> Result<String, String> {
     let command = r#"
-        # Contar ameaças
         $threats = Get-MpThreatDetection
         $count = $threats.Count
         
-        # Remover uma por uma para garantir
         foreach ($threat in $threats) {
             Remove-MpThreat -ThreatID $threat.ThreatID
         }
         
-        # Forçar limpeza do cache/histórico
         Remove-Item -Path "$env:ProgramData\Microsoft\Windows Defender\Scans\History\*" -Recurse -Force -ErrorAction SilentlyContinue
         
-        # Verificar se ainda tem algo
         $remaining = (Get-MpThreatDetection).Count
         
         if ($remaining -gt 0) {
@@ -392,60 +384,157 @@ async fn remove_all_threats() -> Result<String, String> {
 #[tauri::command]
 async fn quarantine_threat(threat_id: u64) -> Result<String, String> {
     let command = format!(r#"
-        # Colocar ameaça específica em quarentena
-        $threat = Get-MpThreatDetection | Where-Object {{ $_.ThreatID -eq {} }}
-        
-        if ($threat) {{
-            # Tentar colocar em quarentena
-            Remove-MpThreat -ThreatID {}
-            "Ameaça movida para quarentena"
-        }} else {{
-            "Ameaça não encontrada"
+        try {{
+            $threat = Get-MpThreatDetection | Where-Object {{ $_.ThreatID -eq {} }}
+            
+            if (-not $threat) {{
+                Write-Output "SUCCESS: Ameaça não encontrada"
+                exit
+            }}
+            
+            if ($threat.ThreatStatusID -eq 2 -or $threat.ThreatStatusID -eq 3) {{
+                Write-Output "SUCCESS: Já está em quarentena"
+            }} elseif ($threat.ThreatStatusID -eq 6) {{
+                Write-Output "SUCCESS: Já foi removida"
+            }} else {{
+                Write-Output "INFO: Status: $($threat.ThreatStatusID)"
+            }}
+        }} catch {{
+            Write-Output "ERROR: $($_.Exception.Message)"
         }}
-    "#, threat_id, threat_id);
+    "#, threat_id);
     
     let result = run_powershell(&command)?;
-    Ok(result.trim().to_string())
+    
+    if result.contains("ERROR:") {
+        return Err(result.replace("ERROR: ", "").trim().to_string());
+    }
+    
+    let last_line = result.lines().last().unwrap_or("Ação executada");
+    Ok(last_line.replace("SUCCESS: ", "").replace("INFO: ", "").trim().to_string())
 }
 
 #[tauri::command]
 async fn remove_specific_threat(threat_id: u64) -> Result<String, String> {
     let command = format!(r#"
-        # Remover ameaça específica permanentemente
-        Remove-MpThreat -ThreatID {}
-        "Ameaça removida"
+        try {{
+            $threat = Get-MpThreatDetection | Where-Object {{ $_.ThreatID -eq {} }}
+            
+            if (-not $threat) {{
+                Write-Output "SUCCESS: Ameaça não existe mais"
+                exit
+            }}
+            
+            if ($threat.Resources) {{
+                $filePath = $threat.Resources[0] -replace '^[^:]+:_', ''
+                
+                if (Test-Path $filePath) {{
+                    Remove-Item -Path $filePath -Force -ErrorAction Stop
+                    Write-Output "SUCCESS: Arquivo deletado"
+                }} else {{
+                    Write-Output "SUCCESS: Arquivo não existe"
+                }}
+            }} else {{
+                Remove-MpThreat -ErrorAction SilentlyContinue
+                Write-Output "SUCCESS: Removido do histórico"
+            }}
+        }} catch {{
+            Write-Output "ERROR: $($_.Exception.Message)"
+        }}
     "#, threat_id);
     
     let result = run_powershell(&command)?;
-    Ok(result.trim().to_string())
+    
+    if result.contains("ERROR:") {
+        return Err(result.replace("ERROR: ", "").trim().to_string());
+    }
+    
+    let last_line = result.lines().last().unwrap_or("Ação executada");
+    Ok(last_line.replace("SUCCESS: ", "").trim().to_string())
 }
 
 #[tauri::command]
-async fn allow_threat(threat_id: u64, file_path: String) -> Result<String, String> {
+async fn allow_threat(_threat_id: u64, file_path: String) -> Result<String, String> {
+    let clean_path = file_path
+        .replace("file:_", "")
+        .replace("->", "\\")
+        .trim()
+        .to_string();
+    
     let command = format!(r#"
-        # Adicionar exceção para o arquivo
-        Add-MpPreference -ExclusionPath "{}"
-        
-        # Remover da quarentena
-        Remove-MpThreat -ThreatID {}
-        
-        "Arquivo permitido e adicionado às exceções"
-    "#, file_path.replace("file:_", "").replace("->", "\\"), threat_id);
+        try {{
+            Add-MpPreference -ExclusionPath "{}" -ErrorAction Stop
+            
+            if (Test-Path "{}") {{
+                Remove-Item -Path "{}" -Force -ErrorAction SilentlyContinue
+            }}
+            
+            Write-Output "SUCCESS: Arquivo permitido"
+        }} catch {{
+            Write-Output "ERROR: $($_.Exception.Message)"
+        }}
+    "#, clean_path, clean_path, clean_path);
     
     let result = run_powershell(&command)?;
-    Ok(result.trim().to_string())
+    
+    if result.contains("ERROR:") {
+        return Err(result.replace("ERROR: ", "").trim().to_string());
+    }
+    
+    Ok(result.replace("SUCCESS: ", "").trim().to_string())
 }
 
 #[tauri::command]
 async fn restore_threat(threat_id: u64) -> Result<String, String> {
     let command = format!(r#"
-        # Restaurar arquivo da quarentena
-        Restore-MpPreference -ThreatID {}
-        "Arquivo restaurado da quarentena"
+        try {{
+            $threat = Get-MpThreatDetection | Where-Object {{ $_.ThreatID -eq {} }}
+            
+            if (-not $threat) {{
+                throw "Ameaça não encontrada"
+            }}
+            
+            if ($threat.Resources) {{
+                $filePath = $threat.Resources[0] -replace '^[^:]+:_', ''
+                Add-MpPreference -ExclusionPath $filePath -ErrorAction Stop
+                Write-Output "SUCCESS: Adicionado às exceções"
+            }} else {{
+                Write-Output "SUCCESS: Marcado como permitido"
+            }}
+        }} catch {{
+            Write-Output "ERROR: $($_.Exception.Message)"
+        }}
     "#, threat_id);
     
     let result = run_powershell(&command)?;
-    Ok(result.trim().to_string())
+    
+    if result.contains("ERROR:") {
+        return Err(result.replace("ERROR: ", "").trim().to_string());
+    }
+    
+    Ok(result.replace("SUCCESS: ", "").trim().to_string())
+}
+
+
+#[tauri::command]
+async fn refresh_threat_detection() -> Result<String, String> {
+    let command = r#"
+        try {
+            Update-MpSignature -ErrorAction SilentlyContinue
+            Start-Sleep -Milliseconds 300
+            Write-Output "SUCCESS: Status atualizado"
+        } catch {
+            Write-Output "ERROR: $($_.Exception.Message)"
+        }
+    "#;
+    
+    let result = run_powershell(command)?;
+    
+    if result.contains("ERROR:") {
+        return Err(result.replace("ERROR: ", "").trim().to_string());
+    }
+    
+    Ok(result.replace("SUCCESS: ", "").trim().to_string())
 }
 
 #[tauri::command]
@@ -455,7 +544,6 @@ fn get_scan_history() -> Result<Vec<ScanHistoryItem>, String> {
         
         $history = @()
         
-        # Quick Scan
         if ($status.QuickScanStartTime) {
             $history += @{
                 scan_type = "Quick Scan"
@@ -470,7 +558,6 @@ fn get_scan_history() -> Result<Vec<ScanHistoryItem>, String> {
             }
         }
         
-        # Full Scan
         if ($status.FullScanStartTime) {
             $history += @{
                 scan_type = "Full Scan"
@@ -485,11 +572,9 @@ fn get_scan_history() -> Result<Vec<ScanHistoryItem>, String> {
             }
         }
         
-        # IMPORTANTE: Converter para JSON como array
         if ($history.Count -eq 0) {
             "[]"
         } elseif ($history.Count -eq 1) {
-            # PowerShell não converte array de 1 item corretamente
             "[" + ($history[0] | ConvertTo-Json -Compress) + "]"
         } else {
             $history | ConvertTo-Json
@@ -526,6 +611,7 @@ pub fn run() {
             remove_specific_threat,
             allow_threat,
             restore_threat,
+            refresh_threat_detection,
             get_scan_history
         ])
         .run(tauri::generate_context!())
