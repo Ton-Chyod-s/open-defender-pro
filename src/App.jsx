@@ -149,7 +149,7 @@ function ConfirmModal({ isOpen, onClose, onConfirm, title, message }) {
           <button className="btn btn-secondary" onClick={onClose}>
             Cancelar
           </button>
-          <button className="btn btn-danger" onClick={() => { onConfirm(); onClose(); }}>
+          <button className="btn btn-danger" onClick={async () => { await onConfirm?.(); onClose(); }}>
             Confirmar
           </button>
         </div>
@@ -340,7 +340,7 @@ function DefenderTab({ threats, setThreats, isScanning, setIsScanning, scanResul
         setCurrentFile(randomFile);
         fileCount += Math.floor(Math.random() * 50) + 10;
         setFilesScanned(fileCount);
-      }, 600);
+      }, 150);
 
       const result = await invoke('quick_scan');
       
@@ -420,7 +420,7 @@ function DefenderTab({ threats, setThreats, isScanning, setIsScanning, scanResul
         setCurrentFile(randomFile);
         fileCount += Math.floor(Math.random() * 100) + 20;
         setFilesScanned(fileCount);
-      }, 800);
+      }, 300);
 
       const result = await invoke('full_scan');
       
