@@ -3,8 +3,10 @@ use crate::services::DefenderStatusService;
 
 /// Obtém o status atual do Windows Defender
 #[tauri::command]
-pub fn get_defender_status() -> Result<DefenderStatus, String> {
-    DefenderStatusService::get_status()
+pub async fn get_defender_status() -> Result<DefenderStatus, String> {
+    tauri::async_runtime::spawn_blocking(|| DefenderStatusService::get_status())
+        .await
+        .map_err(|e| format!("Erro ao executar comando: {}", e))?
 }
 
 /// Atualiza as definições de vírus
@@ -18,3 +20,4 @@ pub async fn update_definitions() -> Result<String, String> {
 pub async fn refresh_threat_detection() -> Result<String, String> {
     DefenderStatusService::refresh_detection().await
 }
+

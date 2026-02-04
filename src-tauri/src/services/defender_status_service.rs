@@ -28,7 +28,8 @@ impl DefenderStatusService {
             }
 
             @{
-                is_enabled = $status.AntivirusEnabled
+                # RealTimeProtectionEnabled reflete o estado do toggle de proteção em tempo real
+                is_enabled = $status.RealTimeProtectionEnabled
                 last_scan = $lastScan
             } | ConvertTo-Json
         "#;
@@ -78,4 +79,5 @@ impl DefenderStatusService {
         
         Ok(result.replace("SUCCESS: ", "").trim().to_string())
     }
+
 }

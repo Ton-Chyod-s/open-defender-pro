@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import './App-CCleaner-Style.css';
 
@@ -163,6 +163,8 @@ function DefenderTab({ threats, setThreats, isScanning, setIsScanning, scanResul
   const [defenderInfo, setDefenderInfo] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+  const defenderLoadingRef = useRef(false);
+  const lastDefenderLoadRef = useRef(0);
   
   // Estados do modal
   const [modal, setModal] = useState({ isOpen: false, title: '', message: '', type: 'info' });
@@ -170,7 +172,25 @@ function DefenderTab({ threats, setThreats, isScanning, setIsScanning, scanResul
   
   useEffect(() => {
     loadThreats();
-    loadDefenderInfo();
+    loadDefenderInfo(true);
+
+    const handleFocus = () => {
+      loadDefenderInfo(true);
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        loadDefenderInfo(true);
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, []);
 
   const showModal = (title, message, type = 'info') => {
@@ -261,12 +281,20 @@ function DefenderTab({ threats, setThreats, isScanning, setIsScanning, scanResul
     }
   };
 
-  const loadDefenderInfo = async () => {
+  const loadDefenderInfo = async (force = false) => {
+    const now = Date.now();
+    if (defenderLoadingRef.current) return;
+    if (!force && now - lastDefenderLoadRef.current < 1000) return;
+
+    defenderLoadingRef.current = true;
+    lastDefenderLoadRef.current = now;
     try {
       const result = await invoke('get_defender_status');
       setDefenderInfo(result);
     } catch (error) {
       console.error('Erro ao carregar info:', error);
+    } finally {
+      defenderLoadingRef.current = false;
     }
   };
 
@@ -274,7 +302,7 @@ function DefenderTab({ threats, setThreats, isScanning, setIsScanning, scanResul
     setIsUpdating(true);
     try {
       await invoke('update_definitions');
-      await loadDefenderInfo();
+      await loadDefenderInfo(true);
       showModal('Sucesso', 'Definições do Windows Defender atualizadas com sucesso!', 'success');
     } catch (error) {
       showModal('Erro', 'Erro ao atualizar definições: ' + error, 'error');
@@ -282,6 +310,7 @@ function DefenderTab({ threats, setThreats, isScanning, setIsScanning, scanResul
       setIsUpdating(false);
     }
   };
+
 
 
   const startQuickScan = async () => {
@@ -587,25 +616,6 @@ function DefenderTab({ threats, setThreats, isScanning, setIsScanning, scanResul
             <div style={{ padding: '16px 20px' }}>
               <div style={{ marginBottom: '12px' }}>
                 <strong>Última verificação:</strong> {defenderInfo.last_scan || 'Nunca'}
-              </div>
-              <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
-                <button 
-                  className="btn btn-primary" 
-                  onClick={updateDefinitions}
-                  disabled={isUpdating}
-                  style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-                >
-                  {isUpdating ? (
-                    <>
-                      <div className="btn-spinner"></div>
-                      Atualizando...
-                    </>
-                  ) : (
-                    <>
-                      🔄 Atualizar Proteção
-                    </>
-                  )}
-                </button>
               </div>
             </div>
           </div>
