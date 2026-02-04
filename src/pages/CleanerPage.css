@@ -1,0 +1,25 @@
+.cleaner-page {
+  padding: 24px;
+}
+
+.coming-soon {
+  text-align: center;
+  padding: 64px 24px;
+}
+
+.coming-soon__icon {
+  font-size: 72px;
+  margin-bottom: 20px;
+}
+
+.coming-soon h3 {
+  margin: 0 0 12px;
+  font-size: 22px;
+  color: #1a1a2e;
+}
+
+.coming-soon p {
+  margin: 0;
+  font-size: 15px;
+  color: #6c757d;
+}

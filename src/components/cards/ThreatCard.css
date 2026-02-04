@@ -1,0 +1,79 @@
+.threat-card__content {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.threat-card__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.threat-card__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.threat-card__icon {
+  font-size: 20px;
+}
+
+.threat-card__name {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a1a2e;
+}
+
+.threat-card__details {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.threat-card__path,
+.threat-card__type {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.threat-card__label {
+  color: #6c757d;
+  font-weight: 500;
+}
+
+.threat-card__path code {
+  background: #f5f7fa;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #495057;
+  word-break: break-all;
+}
+
+.threat-card__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+@media (max-width: 600px) {
+  .threat-card__content {
+    flex-direction: column;
+  }
+  
+  .threat-card__actions {
+    flex-direction: row;
+    width: 100%;
+  }
+  
+  .threat-card__actions .btn {
+    flex: 1;
+  }
+}

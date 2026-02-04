@@ -1,0 +1,79 @@
+.card {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.card--clickable {
+  cursor: pointer;
+}
+
+.card--clickable:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.card--warning {
+  border-left: 4px solid #f39c12;
+}
+
+.card--danger {
+  border-left: 4px solid #e74c3c;
+}
+
+.card--success {
+  border-left: 4px solid #27ae60;
+}
+
+.card--interactive {
+  border: 2px solid transparent;
+}
+
+.card--interactive:hover {
+  border-color: #3498db;
+  background: #f8fbfe;
+}
+
+.card__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.card__icon {
+  font-size: 24px;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f7fa;
+  border-radius: 10px;
+}
+
+.card__title h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a2e;
+}
+
+.card__title p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #6c757d;
+}
+
+.card__body {
+  padding: 16px 20px;
+}
+
+.card__footer {
+  padding: 12px 20px;
+  background: #f8f9fa;
+  border-top: 1px solid #f0f0f0;
+}

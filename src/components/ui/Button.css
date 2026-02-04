@@ -1,0 +1,102 @@
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Sizes */
+.btn--small {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+.btn--medium {
+  padding: 10px 20px;
+  font-size: 14px;
+}
+
+.btn--large {
+  padding: 14px 28px;
+  font-size: 16px;
+}
+
+/* Variants */
+.btn--primary {
+  background: linear-gradient(135deg, #3498db, #2980b9);
+  color: white;
+}
+
+.btn--primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #2980b9, #1f5f8b);
+  transform: translateY(-1px);
+}
+
+.btn--secondary {
+  background: #f5f7fa;
+  color: #495057;
+  border: 1px solid #dee2e6;
+}
+
+.btn--secondary:hover:not(:disabled) {
+  background: #e9ecef;
+}
+
+.btn--danger {
+  background: linear-gradient(135deg, #e74c3c, #c0392b);
+  color: white;
+}
+
+.btn--danger:hover:not(:disabled) {
+  background: linear-gradient(135deg, #c0392b, #a93226);
+}
+
+.btn--success {
+  background: linear-gradient(135deg, #27ae60, #1e8449);
+  color: white;
+}
+
+.btn--success:hover:not(:disabled) {
+  background: linear-gradient(135deg, #1e8449, #196f3d);
+}
+
+.btn--ghost {
+  background: transparent;
+  color: #495057;
+}
+
+.btn--ghost:hover:not(:disabled) {
+  background: #f5f7fa;
+}
+
+/* Loading */
+.btn--loading .btn__text {
+  opacity: 0.7;
+}
+
+.btn__spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.btn__icon {
+  font-size: 1.1em;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

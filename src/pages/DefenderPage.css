@@ -1,0 +1,121 @@
+.defender-page {
+  padding: 24px;
+}
+
+/* Stats Grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+/* Scan Grid */
+.scan-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+/* Scan Progress */
+.scan-progress {
+  text-align: center;
+  padding: 32px 16px;
+}
+
+.scan-progress__icon {
+  font-size: 56px;
+  margin-bottom: 16px;
+}
+
+.scan-progress h3 {
+  margin: 0 0 20px;
+  font-size: 20px;
+  color: #1a1a2e;
+}
+
+.scan-progress__file {
+  background: #f5f7fa;
+  padding: 16px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.scan-progress__file code {
+  font-size: 12px;
+  color: #5f6368;
+  word-break: break-all;
+}
+
+.scan-progress__count {
+  font-size: 14px;
+  color: #6c757d;
+  margin-bottom: 20px;
+}
+
+/* Threats List */
+.threats-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: 48px 24px;
+}
+
+.empty-state__icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+}
+
+.empty-state h4 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  color: #1a1a2e;
+}
+
+.empty-state p {
+  margin: 0;
+  color: #6c757d;
+}
+
+/* Protection Settings */
+.protection-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.protection-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 10px;
+}
+
+.protection-item__info h4 {
+  margin: 0 0 4px;
+  font-size: 15px;
+  color: #1a1a2e;
+}
+
+.protection-item__info p {
+  margin: 0;
+  font-size: 13px;
+  color: #6c757d;
+}
+
+.protection-status {
+  font-size: 14px;
+  font-weight: 600;
+  color: #dc3545;
+}
+
+.protection-status--active {
+  color: #28a745;
+}

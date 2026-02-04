@@ -152,10 +152,20 @@ impl ScanService {
     pub async fn cancel_scan() -> Result<String, String> {
         let command = r#"
             try {
-                # Para processos de scan do Windows Defender
-                Get-Process | Where-Object {
-                    $_.Name -like "*MpCmdRun*" -or $_.Name -like "*MsMpEng*"
-                } | Stop-Process -Force -ErrorAction SilentlyContinue
+                # Método 1: Usar MpCmdRun para cancelar (não requer admin para cancelar scan)
+                $mpPath = "$env:ProgramFiles\Windows Defender\MpCmdRun.exe"
+                if (Test-Path $mpPath) {
+                    Start-Process -FilePath $mpPath -ArgumentList "-SignatureUpdate -Cancel" -NoNewWindow -Wait -ErrorAction SilentlyContinue
+                }
+                
+                # Método 2: Parar apenas o processo de scan (MpCmdRun), não o serviço principal
+                Get-Process -Name "MpCmdRun" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+                
+                # Método 3: Usar WMI para cancelar scan ativo
+                $defender = Get-WmiObject -Namespace "root\Microsoft\Windows\Defender" -Class MSFT_MpScan -ErrorAction SilentlyContinue
+                if ($defender) {
+                    $defender | Remove-WmiObject -ErrorAction SilentlyContinue
+                }
                 
                 Write-Output "SUCCESS: Verificação cancelada"
             } catch {

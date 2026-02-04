@@ -1,0 +1,59 @@
+.progress {
+  position: relative;
+  height: 8px;
+  background: #e9ecef;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress__bar {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.progress__bar--primary {
+  background: linear-gradient(90deg, #3498db, #2980b9);
+}
+
+.progress__bar--success {
+  background: linear-gradient(90deg, #27ae60, #1e8449);
+}
+
+.progress__bar--warning {
+  background: linear-gradient(90deg, #f39c12, #d68910);
+}
+
+.progress__bar--danger {
+  background: linear-gradient(90deg, #e74c3c, #c0392b);
+}
+
+.progress__bar--animated {
+  background-size: 30px 30px;
+  background-image: linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.15) 25%,
+    transparent 25%,
+    transparent 50%,
+    rgba(255, 255, 255, 0.15) 50%,
+    rgba(255, 255, 255, 0.15) 75%,
+    transparent 75%,
+    transparent
+  );
+  animation: progress-stripes 1s linear infinite;
+}
+
+.progress__label {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10px;
+  font-weight: 600;
+  color: #495057;
+}
+
+@keyframes progress-stripes {
+  from { background-position: 30px 0; }
+  to { background-position: 0 0; }
+}
