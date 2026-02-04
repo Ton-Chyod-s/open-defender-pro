@@ -29,15 +29,21 @@ impl PowerShellExecutor {
         }
     }
 
-    /// Verifica se há uma verificação em andamento
+    /// Verifica se há uma verificação em andamento (via Get-MpComputerStatus ou processo)
     pub fn check_scan_running() -> Result<bool, String> {
         let check_command = r#"
-            $status = Get-MpComputerStatus
-            if (($status.QuickScanStartTime -and !$status.QuickScanEndTime) -or 
-                ($status.FullScanStartTime -and !$status.FullScanEndTime)) {
+            # Verifica via processo MpCmdRun
+            $mpProcess = Get-Process -Name "MpCmdRun" -ErrorAction SilentlyContinue
+            if ($mpProcess) {
                 "RUNNING"
             } else {
-                "IDLE"
+                # Verifica via status do Defender
+                $status = Get-MpComputerStatus -ErrorAction SilentlyContinue
+                if ($status -and $status.AntivirusScanInProgress) {
+                    "RUNNING"
+                } else {
+                    "IDLE"
+                }
             }
         "#;
         

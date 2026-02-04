@@ -5,7 +5,39 @@ use crate::models::{ScanResult, ScanHistoryItem, ScanSummary};
 pub struct ScanService;
 
 impl ScanService {
-    /// Executa uma verificação rápida
+    /// Inicia uma verificação rápida (não bloqueante)
+    pub async fn start_quick_scan() -> Result<String, String> {
+        // Verifica se já há uma verificação em andamento
+        if PowerShellExecutor::check_scan_running()? {
+            return Err("Já existe uma verificação em andamento. Aguarde ela terminar.".to_string());
+        }
+        
+        // Inicia a verificação em background - NÃO espera terminar
+        let scan_command = r#"
+            try {
+                $mpPath = "$env:ProgramFiles\Windows Defender\MpCmdRun.exe"
+                if (Test-Path $mpPath) {
+                    Start-Process -FilePath $mpPath -ArgumentList "-Scan -ScanType 1" -WindowStyle Hidden
+                    Write-Output "SUCCESS: Verificação rápida iniciada"
+                } else {
+                    Start-Job -ScriptBlock { Start-MpScan -ScanType QuickScan } | Out-Null
+                    Write-Output "SUCCESS: Verificação rápida iniciada"
+                }
+            } catch {
+                Write-Output "ERROR: $($_.Exception.Message)"
+            }
+        "#;
+        
+        let result = PowerShellExecutor::run(scan_command)?;
+        
+        if result.contains("ERROR:") {
+            return Err(result.replace("ERROR: ", "").trim().to_string());
+        }
+        
+        Ok("Verificação rápida iniciada".to_string())
+    }
+    
+    /// Executa uma verificação rápida (bloqueante - para compatibilidade)
     pub async fn quick_scan() -> Result<ScanResult, String> {
         // Verifica se já há uma verificação em andamento
         if PowerShellExecutor::check_scan_running()? {
@@ -14,11 +46,22 @@ impl ScanService {
         
         let start_time = std::time::Instant::now();
         
-        // Inicia a verificação rápida
+        // Inicia a verificação rápida usando MpCmdRun.exe em processo separado
         let scan_command = r#"
             try {
-                Start-MpScan -ScanType QuickScan -ErrorAction Stop
-                Write-Output "SUCCESS"
+                $mpPath = "$env:ProgramFiles\Windows Defender\MpCmdRun.exe"
+                if (Test-Path $mpPath) {
+                    $proc = Start-Process -FilePath $mpPath -ArgumentList "-Scan -ScanType 1" -PassThru -WindowStyle Hidden
+                    $proc.WaitForExit()
+                    if ($proc.ExitCode -eq 0 -or $proc.ExitCode -eq 2) {
+                        Write-Output "SUCCESS"
+                    } else {
+                        Write-Output "ERROR: Scan falhou com código $($proc.ExitCode)"
+                    }
+                } else {
+                    Start-MpScan -ScanType QuickScan -ErrorAction Stop
+                    Write-Output "SUCCESS"
+                }
             } catch {
                 Write-Output "ERROR: $($_.Exception.Message)"
             }
@@ -48,6 +91,38 @@ impl ScanService {
         })
     }
 
+    /// Inicia uma verificação completa (não bloqueante)
+    pub async fn start_full_scan() -> Result<String, String> {
+        // Verifica se já há uma verificação em andamento
+        if PowerShellExecutor::check_scan_running()? {
+            return Err("Já existe uma verificação em andamento. Aguarde ela terminar.".to_string());
+        }
+        
+        // Inicia a verificação em background - NÃO espera terminar
+        let scan_command = r#"
+            try {
+                $mpPath = "$env:ProgramFiles\Windows Defender\MpCmdRun.exe"
+                if (Test-Path $mpPath) {
+                    Start-Process -FilePath $mpPath -ArgumentList "-Scan -ScanType 2" -WindowStyle Hidden
+                    Write-Output "SUCCESS: Verificação completa iniciada"
+                } else {
+                    Start-Job -ScriptBlock { Start-MpScan -ScanType FullScan } | Out-Null
+                    Write-Output "SUCCESS: Verificação completa iniciada"
+                }
+            } catch {
+                Write-Output "ERROR: $($_.Exception.Message)"
+            }
+        "#;
+        
+        let result = PowerShellExecutor::run(scan_command)?;
+        
+        if result.contains("ERROR:") {
+            return Err(result.replace("ERROR: ", "").trim().to_string());
+        }
+        
+        Ok("Verificação completa iniciada".to_string())
+    }
+
     /// Executa uma verificação completa
     pub async fn full_scan() -> Result<ScanResult, String> {
         // Verifica se já há uma verificação em andamento
@@ -57,11 +132,23 @@ impl ScanService {
         
         let start_time = std::time::Instant::now();
         
-        // Inicia a verificação completa
+        // Inicia a verificação completa usando MpCmdRun.exe em processo separado
         let scan_command = r#"
             try {
-                Start-MpScan -ScanType FullScan -ErrorAction Stop
-                Write-Output "SUCCESS"
+                $mpPath = "$env:ProgramFiles\Windows Defender\MpCmdRun.exe"
+                if (Test-Path $mpPath) {
+                    # Executa em background para poder ser cancelado
+                    $proc = Start-Process -FilePath $mpPath -ArgumentList "-Scan -ScanType 2" -PassThru -WindowStyle Hidden
+                    $proc.WaitForExit()
+                    if ($proc.ExitCode -eq 0 -or $proc.ExitCode -eq 2) {
+                        Write-Output "SUCCESS"
+                    } else {
+                        Write-Output "ERROR: Scan falhou com código $($proc.ExitCode)"
+                    }
+                } else {
+                    Start-MpScan -ScanType FullScan -ErrorAction Stop
+                    Write-Output "SUCCESS"
+                }
             } catch {
                 Write-Output "ERROR: $($_.Exception.Message)"
             }
@@ -114,15 +201,26 @@ impl ScanService {
         let files_output = PowerShellExecutor::run(&count_command)?;
         let files_scanned: u32 = files_output.trim().parse().unwrap_or(0);
 
-        // Inicia a verificação personalizada
+        // Inicia a verificação personalizada usando MpCmdRun.exe
         let scan_command = format!(r#"
             try {{
-                Start-MpScan -ScanType CustomScan -ScanPath '{}' -ErrorAction Stop
-                Write-Output "SUCCESS"
+                $mpPath = "$env:ProgramFiles\Windows Defender\MpCmdRun.exe"
+                if (Test-Path $mpPath) {{
+                    $proc = Start-Process -FilePath $mpPath -ArgumentList "-Scan -ScanType 3 -File `"{}`"" -PassThru -WindowStyle Hidden
+                    $proc.WaitForExit()
+                    if ($proc.ExitCode -eq 0 -or $proc.ExitCode -eq 2) {{
+                        Write-Output "SUCCESS"
+                    }} else {{
+                        Write-Output "ERROR: Scan falhou com código $($proc.ExitCode)"
+                    }}
+                }} else {{
+                    Start-MpScan -ScanType CustomScan -ScanPath '{}' -ErrorAction Stop
+                    Write-Output "SUCCESS"
+                }}
             }} catch {{
                 Write-Output "ERROR: $($_.Exception.Message)"
             }}
-        "#, safe_path);
+        "#, safe_path, safe_path);
 
         let scan_result = PowerShellExecutor::run(&scan_command)?;
 
@@ -152,22 +250,20 @@ impl ScanService {
     pub async fn cancel_scan() -> Result<String, String> {
         let command = r#"
             try {
-                # Método 1: Usar MpCmdRun para cancelar (não requer admin para cancelar scan)
-                $mpPath = "$env:ProgramFiles\Windows Defender\MpCmdRun.exe"
-                if (Test-Path $mpPath) {
-                    Start-Process -FilePath $mpPath -ArgumentList "-SignatureUpdate -Cancel" -NoNewWindow -Wait -ErrorAction SilentlyContinue
+                # Parar o processo MpCmdRun que executa o scan
+                $stopped = $false
+                $processes = Get-Process -Name "MpCmdRun" -ErrorAction SilentlyContinue
+                
+                if ($processes) {
+                    $processes | Stop-Process -Force -ErrorAction Stop
+                    $stopped = $true
                 }
                 
-                # Método 2: Parar apenas o processo de scan (MpCmdRun), não o serviço principal
-                Get-Process -Name "MpCmdRun" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-                
-                # Método 3: Usar WMI para cancelar scan ativo
-                $defender = Get-WmiObject -Namespace "root\Microsoft\Windows\Defender" -Class MSFT_MpScan -ErrorAction SilentlyContinue
-                if ($defender) {
-                    $defender | Remove-WmiObject -ErrorAction SilentlyContinue
+                if ($stopped) {
+                    Write-Output "SUCCESS: Verificação cancelada"
+                } else {
+                    Write-Output "SUCCESS: Nenhuma verificação em andamento"
                 }
-                
-                Write-Output "SUCCESS: Verificação cancelada"
             } catch {
                 Write-Output "ERROR: $($_.Exception.Message)"
             }

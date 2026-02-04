@@ -320,6 +320,9 @@ function DefenderTab({ threats, setThreats, isScanning, setIsScanning, scanResul
       setFilesScanned(0);
       setCurrentFile('Iniciando scan...');
       
+      // Inicia o scan em background (não bloqueante)
+      await invoke('start_quick_scan');
+      
       const commonPaths = [
         'C:\\Users\\Downloads\\',
         'C:\\Users\\Documents\\',
@@ -334,54 +337,73 @@ function DefenderTab({ threats, setThreats, isScanning, setIsScanning, scanResul
       ];
       
       let fileCount = 0;
-      const scanInterval = setInterval(() => {
+      const startTime = Date.now();
+      let isChecking = false; // Flag para evitar chamadas simultâneas
+      
+      // Interval para animação visual (rápido)
+      const animationInterval = setInterval(() => {
         const randomPath = commonPaths[Math.floor(Math.random() * commonPaths.length)];
         const randomFile = `${randomPath}arquivo_${Math.floor(Math.random() * 10000)}.dll`;
         setCurrentFile(randomFile);
         fileCount += Math.floor(Math.random() * 50) + 10;
         setFilesScanned(fileCount);
       }, 150);
-
-      const result = await invoke('quick_scan');
       
-      clearInterval(scanInterval);
-      setCurrentFile('Scan concluído!');
-      setScanResults(result);
-      setFilesScanned(fileCount);
-      setIsScanning(false);
-
-      const nowLabel = new Date().toLocaleDateString('pt-BR') + ' ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-      setDefenderInfo((prev) => ({
-        ...(prev || {}),
-        is_enabled: prev?.is_enabled ?? true,
-        last_scan: nowLabel,
-      }));
-
-      const immediateSummary = {
-        last_scan: new Date().toLocaleDateString('pt-BR') + ' ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-        threats_found: threats?.total_threats ?? 0,
-        duration: formatDurationFromScanTime(result?.scan_time),
-        files_scanned: fileCount,
-      };
-
-      showModal(
-        'Ameaças atuais',
-        formatDefenderScanMessage('verificação rápida', immediateSummary, fileCount),
-        (immediateSummary.threats_found ?? 0) > 0 ? 'warning' : 'success'
-      );
-
-      loadThreats().then(async () => {
+      // Interval separado para polling de status (mais lento)
+      const statusInterval = setInterval(async () => {
+        if (isChecking) return; // Evita chamadas simultâneas
+        isChecking = true;
+        
         try {
-          const summary = await invoke('get_last_scan_summary', { scanType: 'quick' });
-          showModal(
-            'Ameaças atuais',
-            formatDefenderScanMessage('verificação rápida', summary, fileCount),
-            (summary?.threats_found ?? 0) > 0 ? 'warning' : 'success'
-          );
-        } catch (e) {
-          // mantém o modal imediato se falhar
+          const isRunning = await invoke('is_scan_running');
+          if (!isRunning) {
+            // Scan terminou - limpa os intervals
+            clearInterval(animationInterval);
+            clearInterval(statusInterval);
+            window.currentScanInterval = null;
+            window.currentStatusInterval = null;
+            
+            const elapsedMs = Date.now() - startTime;
+            const scanTime = elapsedMs < 60000 
+              ? `${(elapsedMs / 1000).toFixed(2)}s` 
+              : `${(elapsedMs / 60000).toFixed(1)}min`;
+            
+            setCurrentFile('Scan concluído!');
+            setScanResults({ threats_found: 0, files_scanned: fileCount, scan_time: scanTime });
+            setFilesScanned(fileCount);
+            setIsScanning(false);
+
+            const nowLabel = new Date().toLocaleDateString('pt-BR') + ' ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            setDefenderInfo((prev) => ({
+              ...(prev || {}),
+              is_enabled: prev?.is_enabled ?? true,
+              last_scan: nowLabel,
+            }));
+
+            await loadThreats();
+            
+            try {
+              const summary = await invoke('get_last_scan_summary', { scanType: 'quick' });
+              showModal(
+                'Ameaças atuais',
+                formatDefenderScanMessage('verificação rápida', summary, fileCount),
+                (summary?.threats_found ?? 0) > 0 ? 'warning' : 'success'
+              );
+            } catch (e) {
+              showModal('Sucesso', `Verificação rápida concluída!\n\nArquivos verificados: ${fileCount}\nTempo: ${scanTime}`, 'success');
+            }
+          }
+        } catch (err) {
+          console.error('Erro ao verificar status:', err);
+        } finally {
+          isChecking = false;
         }
-      });
+      }, 2000); // Verifica a cada 2 segundos
+
+      // Guarda referências para poder cancelar
+      window.currentScanInterval = animationInterval;
+      window.currentStatusInterval = statusInterval;
+
     } catch (error) {
       console.error('Erro no scan:', error);
       setIsScanning(false);
@@ -400,6 +422,9 @@ function DefenderTab({ threats, setThreats, isScanning, setIsScanning, scanResul
       setFilesScanned(0);
       setCurrentFile('Iniciando scan completo...');
       
+      // Inicia o scan em background (não bloqueante)
+      await invoke('start_full_scan');
+      
       const commonPaths = [
         'C:\\Users\\Downloads\\',
         'C:\\Users\\Documents\\',
@@ -414,54 +439,64 @@ function DefenderTab({ threats, setThreats, isScanning, setIsScanning, scanResul
       ];
       
       let fileCount = 0;
+      const startTime = Date.now();
+      
+      // Polling para verificar se o scan ainda está rodando
+      const checkScanStatus = async () => {
+        try {
+          const isRunning = await invoke('is_scan_running');
+          if (!isRunning) {
+            // Scan terminou
+            clearInterval(scanInterval);
+            const elapsedMs = Date.now() - startTime;
+            const scanTime = elapsedMs < 60000 
+              ? `${(elapsedMs / 1000).toFixed(2)}s` 
+              : `${(elapsedMs / 60000).toFixed(1)}min`;
+            
+            setCurrentFile('Scan concluído!');
+            setScanResults({ threats_found: 0, files_scanned: fileCount, scan_time: scanTime });
+            setFilesScanned(fileCount);
+            setIsScanning(false);
+
+            const nowLabel = new Date().toLocaleDateString('pt-BR') + ' ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            setDefenderInfo((prev) => ({
+              ...(prev || {}),
+              is_enabled: prev?.is_enabled ?? true,
+              last_scan: nowLabel,
+            }));
+
+            await loadThreats();
+            
+            try {
+              const summary = await invoke('get_last_scan_summary', { scanType: 'full' });
+              showModal(
+                'Ameaças atuais',
+                formatDefenderScanMessage('verificação completa', summary, fileCount),
+                (summary?.threats_found ?? 0) > 0 ? 'warning' : 'success'
+              );
+            } catch (e) {
+              showModal('Sucesso', `Verificação completa concluída!\n\nArquivos verificados: ${fileCount}\nTempo: ${scanTime}`, 'success');
+            }
+          }
+        } catch (err) {
+          console.error('Erro ao verificar status:', err);
+        }
+      };
+      
       const scanInterval = setInterval(() => {
         const randomPath = commonPaths[Math.floor(Math.random() * commonPaths.length)];
         const randomFile = `${randomPath}arquivo_${Math.floor(Math.random() * 10000)}.dll`;
         setCurrentFile(randomFile);
         fileCount += Math.floor(Math.random() * 100) + 20;
         setFilesScanned(fileCount);
+        
+        // Verifica status a cada iteração
+        checkScanStatus();
       }, 300);
 
-      const result = await invoke('full_scan');
-      
-      clearInterval(scanInterval);
-      setCurrentFile('Scan concluído!');
-      setScanResults(result);
-      setFilesScanned(fileCount);
-      setIsScanning(false);
+      // Guarda referência do interval para poder cancelar
+      window.currentScanInterval = scanInterval;
 
-      const nowLabel = new Date().toLocaleDateString('pt-BR') + ' ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-      setDefenderInfo((prev) => ({
-        ...(prev || {}),
-        is_enabled: prev?.is_enabled ?? true,
-        last_scan: nowLabel,
-      }));
-
-      const immediateSummary = {
-        last_scan: new Date().toLocaleDateString('pt-BR') + ' ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-        threats_found: threats?.total_threats ?? 0,
-        duration: formatDurationFromScanTime(result?.scan_time),
-        files_scanned: fileCount,
-      };
-
-      showModal(
-        'Ameaças atuais',
-        formatDefenderScanMessage('verificação completa', immediateSummary, fileCount),
-        (immediateSummary.threats_found ?? 0) > 0 ? 'warning' : 'success'
-      );
-
-      loadThreats().then(async () => {
-        try {
-          const summary = await invoke('get_last_scan_summary', { scanType: 'full' });
-          showModal(
-            'Ameaças atuais',
-            formatDefenderScanMessage('verificação completa', summary, fileCount),
-            (summary?.threats_found ?? 0) > 0 ? 'warning' : 'success'
-          );
-        } catch (e) {
-          // mantém o modal imediato se falhar
-        }
-      });
     } catch (error) {
       console.error('Erro no scan:', error);
       setIsScanning(false);
@@ -548,11 +583,30 @@ function DefenderTab({ threats, setThreats, isScanning, setIsScanning, scanResul
   };
 
   const handleCancelScan = async () => {
+    // Primeiro limpa os intervals imediatamente (resposta instantânea no UI)
+    if (window.currentScanInterval) {
+      clearInterval(window.currentScanInterval);
+      window.currentScanInterval = null;
+    }
+    if (window.currentStatusInterval) {
+      clearInterval(window.currentStatusInterval);
+      window.currentStatusInterval = null;
+    }
+    
+    // Reseta o estado do frontend imediatamente
+    setIsScanning(false);
+    setCurrentFile('');
+    setFilesScanned(0);
+    setScanResults(null);
+    
+    // Depois tenta cancelar o processo no backend
     try {
       await invoke('cancel_scan');
-      window.location.reload();
+      showModal('Cancelado', 'Verificação cancelada com sucesso.', 'info');
     } catch (error) {
-      console.error('Erro ao cancelar:', error);
+      console.error('Erro ao cancelar processo:', error);
+      // Mesmo com erro, o UI já foi resetado
+      showModal('Aviso', 'Verificação interrompida no aplicativo.', 'info');
     }
   };
 

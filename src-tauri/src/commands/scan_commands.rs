@@ -1,7 +1,26 @@
 use crate::models::{ScanResult, ScanHistoryItem, ScanSummary};
 use crate::services::ScanService;
+use crate::infra::PowerShellExecutor;
 use tauri::AppHandle;
 use tauri_plugin_dialog::{DialogExt, FilePath};
+
+/// Inicia uma verificação rápida (não bloqueante - pode ser cancelada)
+#[tauri::command]
+pub async fn start_quick_scan() -> Result<String, String> {
+    ScanService::start_quick_scan().await
+}
+
+/// Inicia uma verificação completa (não bloqueante - pode ser cancelada)
+#[tauri::command]
+pub async fn start_full_scan() -> Result<String, String> {
+    ScanService::start_full_scan().await
+}
+
+/// Verifica se há um scan em andamento
+#[tauri::command]
+pub fn is_scan_running() -> Result<bool, String> {
+    PowerShellExecutor::check_scan_running()
+}
 
 /// Executa uma verificação rápida
 #[tauri::command]
