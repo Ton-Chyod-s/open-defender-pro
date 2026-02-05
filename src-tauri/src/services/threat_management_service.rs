@@ -1,5 +1,5 @@
 use crate::infra::PowerShellExecutor;
-use crate::models::{ThreatDetail, ThreatSummary};
+use crate::models::ThreatSummary;
 
 /// Serviço para gerenciar ameaças detectadas
 pub struct ThreatManagementService;

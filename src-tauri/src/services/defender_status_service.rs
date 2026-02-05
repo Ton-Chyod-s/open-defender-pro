@@ -35,8 +35,14 @@ impl DefenderStatusService {
         "#;
 
         let output = PowerShellExecutor::run(command)?;
+        
+        // Debug: mostra o que foi retornado do PowerShell
+        eprintln!("=== DEBUG: get_defender_status output ===");
+        eprintln!("{}", output.trim());
+        eprintln!("=== END DEBUG ===");
+        
         serde_json::from_str(&output)
-            .map_err(|e| format!("Erro ao parsear JSON: {}", e))
+            .map_err(|e| format!("Erro ao parsear JSON: {} | Output: {}", e, output))
     }
 
     /// Atualiza as definições de vírus
