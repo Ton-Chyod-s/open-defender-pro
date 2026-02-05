@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { CleanerPage } from './pages/CleanerPage';
+import { DefenderLogo, CleanerIcon, ShieldCheckIcon, CogIcon } from './components/icons';
 import './App-CCleaner-Style.css';
 
 function App() {
@@ -15,10 +16,12 @@ function App() {
     <div className="app-layout">
       <aside className="sidebar">
         <div className="sidebar-header">
-          <div className="sidebar-icon">🛡️</div>
+          <div className="sidebar-icon">
+            <DefenderLogo size={42} />
+          </div>
           <div className="sidebar-title">
-            <h1>DefenderPro</h1>
-            <p>Scanner Profissional</p>
+            <h1>OpenDefenderPro</h1>
+            <p>Scanner Open Source</p>
           </div>
         </div>
 
@@ -27,7 +30,9 @@ function App() {
             className={`nav-item ${activeTab === 'cleaner' ? 'active' : ''}`}
             onClick={() => setActiveTab('cleaner')}
           >
-            <span className="nav-item-icon">🧹</span>
+            <span className="nav-item-icon">
+              <CleanerIcon size={20} />
+            </span>
             <span>Cleaner</span>
           </div>
 
@@ -35,7 +40,9 @@ function App() {
             className={`nav-item ${activeTab === 'defender' ? 'active' : ''}`}
             onClick={() => setActiveTab('defender')}
           >
-            <span className="nav-item-icon">🛡️</span>
+            <span className="nav-item-icon">
+              <ShieldCheckIcon size={20} />
+            </span>
             <span>Defender</span>
           </div>
 
@@ -43,7 +50,9 @@ function App() {
             className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`}
             onClick={() => setActiveTab('settings')}
           >
-            <span className="nav-item-icon">⚙️</span>
+            <span className="nav-item-icon">
+              <CogIcon size={20} />
+            </span>
             <span>Configurações</span>
           </div>
         </nav>
