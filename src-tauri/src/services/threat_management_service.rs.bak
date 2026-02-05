@@ -8,21 +8,10 @@ impl ThreatManagementService {
     /// Obtém detalhes de todas as ameaças
     pub fn get_threat_details() -> Result<ThreatSummary, String> {
         let command = r#"
-            # Força encoding UTF-8 para evitar problemas com caracteres especiais
-            $OutputEncoding = [System.Text.Encoding]::UTF8
-            [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-            
             $threats = Get-MpThreatDetection
             
-            # Se não há ameaças, retorna estrutura completa vazia
             if (-not $threats) {
-                @{
-                    total_threats = 0
-                    high_severity = 0
-                    medium_severity = 0
-                    low_severity = 0
-                    threats = @()
-                } | ConvertTo-Json -Depth 10 -Compress
+                "[]"
                 exit
             }
             
@@ -89,19 +78,15 @@ impl ThreatManagementService {
                     default { "Desconhecida" }
                 }
                 
-                # Caminho do arquivo com tratamento seguro
+                # Caminho do arquivo
                 $filePath = if ($threat.Resources) { 
                     $threat.Resources[0] -replace "^[^:]+:_", "" 
                 } else { 
                     "Desconhecido" 
                 }
 
-                # Verifica se o arquivo ainda existe usando -LiteralPath para segurança
-                $fileExists = if ($filePath -ne "Desconhecido" -and (Test-Path -LiteralPath $filePath -ErrorAction SilentlyContinue)) { 
-                    $true 
-                } else { 
-                    $false 
-                }
+                # Verifica se o arquivo ainda existe
+                $fileExists = if ($filePath -ne "Desconhecido" -and (Test-Path $filePath)) { $true } else { $false }
                 
                 # Monta o objeto
                 $obj = @{
@@ -119,37 +104,38 @@ impl ThreatManagementService {
                 $result += $obj
             }
             
-            # Calcula severidades no PowerShell para evitar reprocessamento
-            $high = ($result | Where-Object { $_.severity -eq "High" }).Count
-            $medium = ($result | Where-Object { $_.severity -eq "Medium" }).Count
-            $low = ($result | Where-Object { $_.severity -eq "Low" }).Count
-            
-            # Retorna estrutura completa com metadados
-            @{
-                total_threats = $result.Count
-                high_severity = $high
-                medium_severity = $medium
-                low_severity = $low
-                threats = $result
-            } | ConvertTo-Json -Depth 10 -Compress
+            $result | ConvertTo-Json
         "#;
         
         let output = PowerShellExecutor::run(command)?;
         
-        // Log para debug (apenas em modo debug)
-        #[cfg(debug_assertions)]
-        {
-            eprintln!("=== DEBUG: get_threat_details output ===");
-            eprintln!("{}", output);
-            eprintln!("=== END DEBUG ===");
+        if output.trim() == "" || output.trim() == "null" || output.trim() == "[]" {
+            return Ok(ThreatSummary {
+                total_threats: 0,
+                high_severity: 0,
+                medium_severity: 0,
+                low_severity: 0,
+                threats: vec![],
+            });
         }
         
-        // Parse direto do JSON estruturado
-        let summary: ThreatSummary = serde_json::from_str(&output)
-            .map_err(|e| format!("Erro ao parsear JSON de ameaças: {} | Output: {}", e, output))?;
+        let threats: Vec<ThreatDetail> = serde_json::from_str(&output)
+            .map_err(|e| format!("Erro ao parsear ameaças: {}", e))?;
         
-        Ok(summary)
+        // Contabiliza severidades
+        let high = threats.iter().filter(|t| t.severity == "High").count() as u32;
+        let medium = threats.iter().filter(|t| t.severity == "Medium").count() as u32;
+        let low = threats.iter().filter(|t| t.severity == "Low").count() as u32;
+        
+        Ok(ThreatSummary {
+            total_threats: threats.len() as u32,
+            high_severity: high,
+            medium_severity: medium,
+            low_severity: low,
+            threats,
+        })
     }
+
     /// Coloca uma ameaça em quarentena
     pub async fn quarantine_threat(threat_id: u64) -> Result<String, String> {
         let command = format!(r#"
@@ -336,7 +322,7 @@ impl ThreatManagementService {
     pub async fn clean_quarantine() -> Result<String, String> {
         let command = r#"
             try {
-                $threats = Get-MpThreatDetection -ErrorAction SilentlyContinue
+                $threats = Get-MpThreatDetection
                 
                 if (-not $threats) {
                     Write-Output "SUCCESS: Nenhuma ameaça na quarentena"
@@ -353,18 +339,8 @@ impl ThreatManagementService {
                     }
                 }
                 
-                # Limpa arquivos de histórico - todos os diretórios relevantes
-                $paths = @(
-                    "C:\ProgramData\Microsoft\Windows Defender\Scans\History\Service\DetectionHistory",
-                    "C:\ProgramData\Microsoft\Windows Defender\Scans\History\CacheManager",
-                    "C:\ProgramData\Microsoft\Windows Defender\Scans\History\ReportLatency",
-                    "C:\ProgramData\Microsoft\Windows Defender\Scans\History\Store"
-                )
-                foreach ($path in $paths) {
-                    if (Test-Path $path) {
-                        Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction SilentlyContinue
-                    }
-                }
+                # Limpa arquivos de histórico
+                Remove-Item -Path "$env:ProgramData\Microsoft\Windows Defender\Scans\History\*" -Recurse -Force -ErrorAction SilentlyContinue
                 
                 Write-Output "SUCCESS: $count ameaça(s) removida(s) da quarentena"
             } catch {
@@ -385,7 +361,7 @@ impl ThreatManagementService {
     pub async fn remove_all_threats() -> Result<String, String> {
         let command = r#"
             try {
-                $threats = Get-MpThreatDetection -ErrorAction SilentlyContinue
+                $threats = Get-MpThreatDetection
                 
                 if (-not $threats) {
                     Write-Output "SUCCESS: Nenhuma ameaça para remover"
@@ -402,18 +378,8 @@ impl ThreatManagementService {
                     }
                 }
                 
-                # Limpa histórico - todos os diretórios relevantes
-                $paths = @(
-                    "C:\ProgramData\Microsoft\Windows Defender\Scans\History\Service\DetectionHistory",
-                    "C:\ProgramData\Microsoft\Windows Defender\Scans\History\CacheManager",
-                    "C:\ProgramData\Microsoft\Windows Defender\Scans\History\ReportLatency",
-                    "C:\ProgramData\Microsoft\Windows Defender\Scans\History\Store"
-                )
-                foreach ($path in $paths) {
-                    if (Test-Path $path) {
-                        Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction SilentlyContinue
-                    }
-                }
+                # Limpa histórico
+                Remove-Item -Path "$env:ProgramData\Microsoft\Windows Defender\Scans\History\*" -Recurse -Force -ErrorAction SilentlyContinue
                 
                 Write-Output "SUCCESS: Todas as $count ameaça(s) foram removidas"
             } catch {
@@ -441,7 +407,14 @@ impl ThreatManagementService {
                     exit
                 }
 
-                $threats = Get-MpThreatDetection -ErrorAction SilentlyContinue
+                # Verifica se o Tamper Protection está ativo
+                $status = Get-MpComputerStatus
+                if ($status.IsTamperProtected -eq $true) {
+                    Write-Output "ERROR: O Tamper Protection está ativo. Desative temporariamente para limpar o histórico"
+                    exit
+                }
+
+                $threats = Get-MpThreatDetection
                 $total = if ($threats) { @($threats).Count } else { 0 }
                 
                 if ($total -eq 0) {
@@ -449,7 +422,7 @@ impl ThreatManagementService {
                     exit
                 }
 
-                # Tenta remoção via Remove-MpThreat primeiro
+                # Tenta remoção rápida via Remove-MpThreat
                 $removed = 0
                 if ($threats) {
                     $threatArray = @($threats)
@@ -465,7 +438,7 @@ impl ThreatManagementService {
 
                 # Aguarda Defender processar
                 Start-Sleep -Seconds 2
-                $remaining = @(Get-MpThreatDetection -ErrorAction SilentlyContinue).Count
+                $remaining = @(Get-MpThreatDetection).Count
 
                 # Se Remove-MpThreat funcionou, sucesso
                 if ($remaining -eq 0) {
@@ -473,23 +446,15 @@ impl ThreatManagementService {
                     exit
                 }
 
-                # Se ainda existem ameaças, faz limpeza profunda do histórico
-                Stop-Service -Name WinDefend -Force -ErrorAction SilentlyContinue 2>&1 | Out-Null
-                Stop-Service -Name WdNisSvc -Force -ErrorAction SilentlyContinue 2>&1 | Out-Null
-                Start-Sleep -Seconds 3
+                # Se ainda existem ameaças, faz limpeza profunda
+                Stop-Service -Name WinDefend -Force -ErrorAction SilentlyContinue | Out-Null
+                Stop-Service -Name WdNisSvc -Force -ErrorAction SilentlyContinue | Out-Null
+                Start-Sleep -Seconds 2
 
-                # Diretórios específicos de histórico do Defender
+                # Limpa diretórios
                 $paths = @(
-                    "C:\ProgramData\Microsoft\Windows Defender\Scans\History\Service\DetectionHistory",
-                    "C:\ProgramData\Microsoft\Windows Defender\Scans\History\CacheManager",
-                    "C:\ProgramData\Microsoft\Windows Defender\Scans\History\ReportLatency",
-                    "C:\ProgramData\Microsoft\Windows Defender\Scans\History\Store",
-                    "C:\ProgramData\Microsoft\Windows Defender\Scans\History\Results\Resource",
-                    "C:\ProgramData\Microsoft\Windows Defender\Scans\History\Results\Quick",
-                    "C:\ProgramData\Microsoft\Windows Defender\LocalCopy",
-                    "C:\ProgramData\Microsoft\Windows Defender\Scans\mpenginedb.db",
-                    "C:\ProgramData\Microsoft\Windows Defender\Scans\mpenginedb.db-wal",
-                    "C:\ProgramData\Microsoft\Windows Defender\Scans\mpenginedb.db-shm"
+                    "$env:ProgramData\Microsoft\Windows Defender\Scans\History",
+                    "$env:ProgramData\Microsoft\Windows Defender\LocalCopy"
                 )
 
                 foreach ($path in $paths) {
@@ -497,28 +462,28 @@ impl ThreatManagementService {
                         try {
                             takeown /f "$path" /a /r /d Y 2>&1 | Out-Null
                             icacls "$path" /grant Administrators:F /t /c /q 2>&1 | Out-Null
-                            Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction SilentlyContinue
+                            Remove-Item -Path $path -Recurse -Force -ErrorAction SilentlyContinue
                         } catch {}
                     }
                 }
 
-                # Limpa Event Log do Windows Defender
+                # Limpa Event Log
                 try {
-                    wevtutil cl "Microsoft-Windows-Windows Defender/Operational" 2>&1 | Out-Null
+                    wevtutil cl "Windows Defender" 2>&1 | Out-Null
                 } catch {}
 
                 # Reinicia serviço
-                Start-Service -Name WinDefend -ErrorAction SilentlyContinue 2>&1 | Out-Null
-                Start-Service -Name WdNisSvc -ErrorAction SilentlyContinue 2>&1 | Out-Null
-                Start-Sleep -Seconds 3
+                Start-Service -Name WinDefend -ErrorAction SilentlyContinue | Out-Null
+                Start-Service -Name WdNisSvc -ErrorAction SilentlyContinue | Out-Null
+                Start-Sleep -Seconds 2
 
                 # Valida resultado final
-                $final_remaining = @(Get-MpThreatDetection -ErrorAction SilentlyContinue).Count
+                $final_remaining = @(Get-MpThreatDetection).Count
                 
                 if ($final_remaining -eq 0) {
                     Write-Output "SUCCESS: Limpeza completa. Removidas: $total de $total"
                 } else {
-                    Write-Output "PARTIAL: Removidas: $removed de $total. Pendentes: $final_remaining. Reinicie o PC para completar."
+                    Write-Output "PARTIAL: Removidas: $removed de $total. Pendentes: $final_remaining"
                 }
             } catch {
                 Write-Output "ERROR: $($_.Exception.Message)"

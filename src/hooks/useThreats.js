@@ -6,15 +6,23 @@ export function useThreats() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRemoving, setIsRemoving] = useState(null); // threatId being removed
   const [isClearing, setIsClearing] = useState(false);
+  const [error, setError] = useState(null);
 
   const loadThreats = useCallback(async () => {
     try {
       setIsLoading(true);
+      setError(null);
       const result = await api.getThreatDetails();
+      
+      // Log para debug
+      console.log('✅ Ameaças carregadas:', result);
+      
       setThreats(result);
       return result;
     } catch (error) {
-      console.error('Erro ao carregar ameaças:', error);
+      console.error('❌ Erro ao carregar ameaças:', error);
+      setError(String(error));
+      
       const fallback = { 
         total_threats: 0, 
         threats: [],
@@ -32,10 +40,12 @@ export function useThreats() {
   const removeThreat = useCallback(async (threatId) => {
     try {
       setIsRemoving(threatId);
+      setError(null);
       await api.removeThreat(threatId);
       await loadThreats();
       return { success: true };
     } catch (error) {
+      setError(String(error));
       return { success: false, error };
     } finally {
       setIsRemoving(null);
@@ -45,10 +55,12 @@ export function useThreats() {
   const clearAllThreats = useCallback(async () => {
     try {
       setIsClearing(true);
+      setError(null);
       await api.clearAllThreats();
       await loadThreats();
       return { success: true };
     } catch (error) {
+      setError(String(error));
       return { success: false, error };
     } finally {
       setIsClearing(false);
@@ -69,6 +81,7 @@ export function useThreats() {
     isLoading,
     isRemoving,
     isClearing,
+    error,
     refresh: loadThreats,
     removeThreat,
     clearAllThreats
