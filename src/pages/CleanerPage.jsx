@@ -118,7 +118,10 @@ export function CleanerPage() {
         temp_files: 'Arquivos Temporários',
         windows_temp: 'Windows Temp',
         recycle_bin: 'Lixeira',
-        browser_cache: 'Cache de Navegadores',
+        chrome_cache: 'Cache do Chrome',
+        brave_cache: 'Cache do Brave',
+        edge_cache: 'Cache do Edge',
+        firefox_cache: 'Cache do Firefox',
         windows_logs: 'Logs do Windows',
         prefetch: 'Prefetch',
         thumbnails: 'Miniaturas'

@@ -12,7 +12,10 @@ impl CleanupService {
                 temp_files = @{ size = 0; count = 0 }
                 windows_temp = @{ size = 0; count = 0 }
                 recycle_bin = @{ size = 0; count = 0 }
-                browser_cache = @{ size = 0; count = 0 }
+                chrome_cache = @{ size = 0; count = 0 }
+                brave_cache = @{ size = 0; count = 0 }
+                edge_cache = @{ size = 0; count = 0 }
+                firefox_cache = @{ size = 0; count = 0 }
                 windows_logs = @{ size = 0; count = 0 }
                 prefetch = @{ size = 0; count = 0 }
                 thumbnails = @{ size = 0; count = 0 }
@@ -47,22 +50,65 @@ impl CleanupService {
                 $result.recycle_bin.size = $totalSize
             } catch {}
 
-            # Cache de navegadores (Chrome, Edge, Firefox)
+            # Cache do Chrome
             try {
-                $browserPaths = @(
+                $chromePaths = @(
                     "$env:LOCALAPPDATA\Google\Chrome\User Data\Default\Cache\*",
-                    "$env:LOCALAPPDATA\Microsoft\Edge\User Data\Default\Cache\*",
-                    "$env:LOCALAPPDATA\Mozilla\Firefox\Profiles\*\cache2\*"
+                    "$env:LOCALAPPDATA\Google\Chrome\User Data\Default\Code Cache\*",
+                    "$env:LOCALAPPDATA\Google\Chrome\User Data\Default\GPUCache\*"
                 )
                 $totalSize = 0
                 $totalCount = 0
-                foreach ($path in $browserPaths) {
+                foreach ($path in $chromePaths) {
                     $items = Get-ChildItem -Path $path -Recurse -Force -ErrorAction SilentlyContinue
                     $totalSize += ($items | Measure-Object -Property Length -Sum -ErrorAction SilentlyContinue).Sum
                     $totalCount += ($items | Measure-Object).Count
                 }
-                $result.browser_cache.size = $totalSize
-                $result.browser_cache.count = $totalCount
+                $result.chrome_cache.size = $totalSize
+                $result.chrome_cache.count = $totalCount
+            } catch {}
+
+            # Cache do Brave
+            try {
+                $bravePaths = @(
+                    "$env:LOCALAPPDATA\BraveSoftware\Brave-Browser\User Data\Default\Cache\*",
+                    "$env:LOCALAPPDATA\BraveSoftware\Brave-Browser\User Data\Default\Code Cache\*",
+                    "$env:LOCALAPPDATA\BraveSoftware\Brave-Browser\User Data\Default\GPUCache\*"
+                )
+                $totalSize = 0
+                $totalCount = 0
+                foreach ($path in $bravePaths) {
+                    $items = Get-ChildItem -Path $path -Recurse -Force -ErrorAction SilentlyContinue
+                    $totalSize += ($items | Measure-Object -Property Length -Sum -ErrorAction SilentlyContinue).Sum
+                    $totalCount += ($items | Measure-Object).Count
+                }
+                $result.brave_cache.size = $totalSize
+                $result.brave_cache.count = $totalCount
+            } catch {}
+
+            # Cache do Edge
+            try {
+                $edgePaths = @(
+                    "$env:LOCALAPPDATA\Microsoft\Edge\User Data\Default\Cache\*",
+                    "$env:LOCALAPPDATA\Microsoft\Edge\User Data\Default\Code Cache\*",
+                    "$env:LOCALAPPDATA\Microsoft\Edge\User Data\Default\GPUCache\*"
+                )
+                $totalSize = 0
+                $totalCount = 0
+                foreach ($path in $edgePaths) {
+                    $items = Get-ChildItem -Path $path -Recurse -Force -ErrorAction SilentlyContinue
+                    $totalSize += ($items | Measure-Object -Property Length -Sum -ErrorAction SilentlyContinue).Sum
+                    $totalCount += ($items | Measure-Object).Count
+                }
+                $result.edge_cache.size = $totalSize
+                $result.edge_cache.count = $totalCount
+            } catch {}
+
+            # Cache do Firefox
+            try {
+                $items = Get-ChildItem -Path "$env:LOCALAPPDATA\Mozilla\Firefox\Profiles\*\cache2\*" -Recurse -Force -ErrorAction SilentlyContinue
+                $result.firefox_cache.size = ($items | Measure-Object -Property Length -Sum -ErrorAction SilentlyContinue).Sum
+                $result.firefox_cache.count = ($items | Measure-Object).Count
             } catch {}
 
             # Logs do Windows
@@ -102,7 +148,10 @@ impl CleanupService {
             temp_files: RawCategory,
             windows_temp: RawCategory,
             recycle_bin: RawCategory,
-            browser_cache: RawCategory,
+            chrome_cache: RawCategory,
+            brave_cache: RawCategory,
+            edge_cache: RawCategory,
+            firefox_cache: RawCategory,
             windows_logs: RawCategory,
             prefetch: RawCategory,
             thumbnails: RawCategory,
@@ -140,12 +189,39 @@ impl CleanupService {
                 selected: true,
             },
             CleanupCategory {
-                id: "browser_cache".to_string(),
-                name: "Cache de Navegadores".to_string(),
-                description: "Cache do Chrome, Edge e Firefox".to_string(),
-                icon: "🌐".to_string(),
-                size_bytes: raw.browser_cache.size.unwrap_or(0),
-                file_count: raw.browser_cache.count.unwrap_or(0),
+                id: "chrome_cache".to_string(),
+                name: "Cache do Chrome".to_string(),
+                description: "Cache, cookies e dados do Google Chrome".to_string(),
+                icon: "🔵".to_string(),
+                size_bytes: raw.chrome_cache.size.unwrap_or(0),
+                file_count: raw.chrome_cache.count.unwrap_or(0),
+                selected: true,
+            },
+            CleanupCategory {
+                id: "brave_cache".to_string(),
+                name: "Cache do Brave".to_string(),
+                description: "Cache, cookies e dados do Brave Browser".to_string(),
+                icon: "🦁".to_string(),
+                size_bytes: raw.brave_cache.size.unwrap_or(0),
+                file_count: raw.brave_cache.count.unwrap_or(0),
+                selected: true,
+            },
+            CleanupCategory {
+                id: "edge_cache".to_string(),
+                name: "Cache do Edge".to_string(),
+                description: "Cache, cookies e dados do Microsoft Edge".to_string(),
+                icon: "🌊".to_string(),
+                size_bytes: raw.edge_cache.size.unwrap_or(0),
+                file_count: raw.edge_cache.count.unwrap_or(0),
+                selected: true,
+            },
+            CleanupCategory {
+                id: "firefox_cache".to_string(),
+                name: "Cache do Firefox".to_string(),
+                description: "Cache e dados do Mozilla Firefox".to_string(),
+                icon: "🦊".to_string(),
+                size_bytes: raw.firefox_cache.size.unwrap_or(0),
+                file_count: raw.firefox_cache.count.unwrap_or(0),
                 selected: true,
             },
             CleanupCategory {
@@ -198,7 +274,10 @@ impl CleanupService {
                 "temp_files" => Self::clean_temp_files(),
                 "windows_temp" => Self::clean_windows_temp(),
                 "recycle_bin" => Self::clean_recycle_bin(),
-                "browser_cache" => Self::clean_browser_cache(),
+                "chrome_cache" => Self::clean_chrome_cache(),
+                "brave_cache" => Self::clean_brave_cache(),
+                "edge_cache" => Self::clean_edge_cache(),
+                "firefox_cache" => Self::clean_firefox_cache(),
                 "windows_logs" => Self::clean_windows_logs(),
                 "prefetch" => Self::clean_prefetch(),
                 "thumbnails" => Self::clean_thumbnails(),
@@ -266,16 +345,15 @@ impl CleanupService {
         Self::parse_clean_result(PowerShellExecutor::run(command)?)
     }
 
-    fn clean_browser_cache() -> Result<(u32, u64), String> {
+    fn clean_chrome_cache() -> Result<(u32, u64), String> {
         let command = r#"
             $size = 0
             $count = 0
             $paths = @(
                 "$env:LOCALAPPDATA\Google\Chrome\User Data\Default\Cache\*",
                 "$env:LOCALAPPDATA\Google\Chrome\User Data\Default\Code Cache\*",
-                "$env:LOCALAPPDATA\Microsoft\Edge\User Data\Default\Cache\*",
-                "$env:LOCALAPPDATA\Microsoft\Edge\User Data\Default\Code Cache\*",
-                "$env:LOCALAPPDATA\Mozilla\Firefox\Profiles\*\cache2\*"
+                "$env:LOCALAPPDATA\Google\Chrome\User Data\Default\GPUCache\*",
+                "$env:LOCALAPPDATA\Google\Chrome\User Data\Default\Service Worker\CacheStorage\*"
             )
             foreach ($path in $paths) {
                 try {
@@ -285,6 +363,67 @@ impl CleanupService {
                     Remove-Item -Path $path -Recurse -Force -ErrorAction SilentlyContinue
                 } catch {}
             }
+            Write-Output "$count|$size"
+        "#;
+        Self::parse_clean_result(PowerShellExecutor::run(command)?)
+    }
+
+    fn clean_brave_cache() -> Result<(u32, u64), String> {
+        let command = r#"
+            $size = 0
+            $count = 0
+            $paths = @(
+                "$env:LOCALAPPDATA\BraveSoftware\Brave-Browser\User Data\Default\Cache\*",
+                "$env:LOCALAPPDATA\BraveSoftware\Brave-Browser\User Data\Default\Code Cache\*",
+                "$env:LOCALAPPDATA\BraveSoftware\Brave-Browser\User Data\Default\GPUCache\*",
+                "$env:LOCALAPPDATA\BraveSoftware\Brave-Browser\User Data\Default\Service Worker\CacheStorage\*"
+            )
+            foreach ($path in $paths) {
+                try {
+                    $items = Get-ChildItem -Path $path -Recurse -Force -ErrorAction SilentlyContinue
+                    $size += ($items | Measure-Object -Property Length -Sum -ErrorAction SilentlyContinue).Sum
+                    $count += ($items | Measure-Object).Count
+                    Remove-Item -Path $path -Recurse -Force -ErrorAction SilentlyContinue
+                } catch {}
+            }
+            Write-Output "$count|$size"
+        "#;
+        Self::parse_clean_result(PowerShellExecutor::run(command)?)
+    }
+
+    fn clean_edge_cache() -> Result<(u32, u64), String> {
+        let command = r#"
+            $size = 0
+            $count = 0
+            $paths = @(
+                "$env:LOCALAPPDATA\Microsoft\Edge\User Data\Default\Cache\*",
+                "$env:LOCALAPPDATA\Microsoft\Edge\User Data\Default\Code Cache\*",
+                "$env:LOCALAPPDATA\Microsoft\Edge\User Data\Default\GPUCache\*",
+                "$env:LOCALAPPDATA\Microsoft\Edge\User Data\Default\Service Worker\CacheStorage\*"
+            )
+            foreach ($path in $paths) {
+                try {
+                    $items = Get-ChildItem -Path $path -Recurse -Force -ErrorAction SilentlyContinue
+                    $size += ($items | Measure-Object -Property Length -Sum -ErrorAction SilentlyContinue).Sum
+                    $count += ($items | Measure-Object).Count
+                    Remove-Item -Path $path -Recurse -Force -ErrorAction SilentlyContinue
+                } catch {}
+            }
+            Write-Output "$count|$size"
+        "#;
+        Self::parse_clean_result(PowerShellExecutor::run(command)?)
+    }
+
+    fn clean_firefox_cache() -> Result<(u32, u64), String> {
+        let command = r#"
+            $size = 0
+            $count = 0
+            try {
+                $items = Get-ChildItem -Path "$env:LOCALAPPDATA\Mozilla\Firefox\Profiles\*\cache2\*" -Recurse -Force -ErrorAction SilentlyContinue
+                $size = ($items | Measure-Object -Property Length -Sum -ErrorAction SilentlyContinue).Sum
+                $count = ($items | Measure-Object).Count
+                Remove-Item -Path "$env:LOCALAPPDATA\Mozilla\Firefox\Profiles\*\cache2\*" -Recurse -Force -ErrorAction SilentlyContinue
+            } catch {}
             Write-Output "$count|$size"
         "#;
         Self::parse_clean_result(PowerShellExecutor::run(command)?)
