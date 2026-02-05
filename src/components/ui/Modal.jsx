@@ -62,7 +62,7 @@ export function ConfirmModal({
           </Button>
           <Button 
             variant={variant === 'danger' ? 'danger' : 'primary'} 
-            onClick={async () => { await onConfirm?.(); onClose(); }}
+            onClick={() => { onConfirm?.(); }}
           >
             {confirmText}
           </Button>

@@ -29,6 +29,28 @@ pub struct ScanSummary {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct CleanResult {
     pub files_deleted: u32,
+    pub size_freed_bytes: u64,
+    pub errors: Option<Vec<String>>,
+}
+
+/// Categoria de limpeza
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct CleanupCategory {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub icon: String,
+    pub size_bytes: u64,
+    pub file_count: u32,
+    pub selected: bool,
+}
+
+/// Análise de limpeza
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct CleanupAnalysis {
+    pub categories: Vec<CleanupCategory>,
+    pub total_size_bytes: u64,
+    pub total_file_count: u32,
 }
 
 /// Detalhes de uma ameaça individual

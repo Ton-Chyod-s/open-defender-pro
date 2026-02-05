@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { CleanerPage } from './pages/CleanerPage';
 import './App-CCleaner-Style.css';
 
 function App() {
@@ -85,19 +86,7 @@ function App() {
 }
 
 function CleanerTab() {
-  return (
-    <div className="cleaner-card">
-      <div className="card-header">
-        <span className="card-header-icon">🧹</span>
-        <div className="card-header-title">
-          <h3>Windows Cleaner</h3>
-        </div>
-      </div>
-      <div className="card-body">
-        <p style={{ padding: '20px' }}>Funcionalidade em desenvolvimento...</p>
-      </div>
-    </div>
-  );
+  return <CleanerPage />;
 }
 
 // COMPONENTE MODAL

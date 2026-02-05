@@ -1,8 +1,14 @@
-use crate::models::CleanResult;
+use crate::models::{CleanResult, CleanupAnalysis};
 use crate::services::CleanupService;
 
-/// Limpa arquivos temporários do sistema
+/// Analisa o que pode ser limpo no sistema
 #[tauri::command]
-pub async fn clean_temp_files() -> Result<CleanResult, String> {
-    CleanupService::clean_temp_files().await
+pub fn analyze_cleanup() -> Result<CleanupAnalysis, String> {
+    CleanupService::analyze()
+}
+
+/// Executa a limpeza das categorias selecionadas
+#[tauri::command]
+pub fn run_cleanup(categories: Vec<String>) -> Result<CleanResult, String> {
+    CleanupService::clean(categories)
 }

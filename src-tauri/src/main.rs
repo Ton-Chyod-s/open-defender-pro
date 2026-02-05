@@ -44,7 +44,8 @@ pub fn run() {
             clean_threat_history,
             
             // ===== Limpeza =====
-            clean_temp_files,
+            analyze_cleanup,
+            run_cleanup,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

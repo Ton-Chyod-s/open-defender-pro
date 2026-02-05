@@ -51,3 +51,12 @@ export async function clearAllThreats() {
 export async function selectFolder() {
   return invoke('select_folder');
 }
+
+// Cleanup
+export async function analyzeCleanup() {
+  return invoke('analyze_cleanup');
+}
+
+export async function runCleanup(categories) {
+  return invoke('run_cleanup', { categories });
+}
